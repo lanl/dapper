@@ -241,6 +241,7 @@ def test_arco_sampling_writes_adapter_ready_csv_and_provenance(tmp_path, monkeyp
         )
         assert output.attrs["sampling_backend"] == "arco"
         assert output.attrs["sampling_grid_cell_count"] == 2
+        assert output.attrs["sampling_requested_start"] == "2020-01-01 00:00:00"
         assert output.attrs["sampling_output_end"] == "2020-01-01 01:00:00"
         assert "area-weighted mean" in output.attrs["sampling_method"]
 

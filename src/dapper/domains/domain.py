@@ -667,6 +667,7 @@ class Domain:
             "sampling_grid_cell_count",
             "sampling_grid_coordinates",
             "sampling_grid_weights",
+            "sampling_requested_start",
             "sampling_start",
             "sampling_source_end",
             "sampling_output_end",

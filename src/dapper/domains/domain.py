@@ -993,6 +993,7 @@ class Domain:
             Optional filename template for output NetCDFs. Supports two formats:
             - Template with {var} placeholder: 'ERA5_{var}_1950-2025_z01' generates 'ERA5_TBOT_1950-2025_z01.nc'
             - Simple prefix (legacy): 'prefix' generates 'prefix_TBOT.nc'
+            If omitted, files use '<driver>_<var>_<start>-<end>_z01.nc'.
             The '.nc' extension is added automatically.
         overwrite : bool
             If False, raises if MET output(s) already exist.

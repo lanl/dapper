@@ -6,6 +6,7 @@ from shapely.geometry import Point
 
 from dapper.domains.domain import Domain
 from dapper.met.adapters.era5 import ERA5Adapter
+from dapper.met.exporter import Exporter
 from dapper.met.temporal import create_dtime, get_start_end_years, normalize_calendar
 
 
@@ -362,6 +363,33 @@ def test_era5_adapter_requests_midnight_only_at_gee_collection_boundary():
     assert "target_start" not in normal
 
 
+def test_met_exporter_default_and_override_filenames(tmp_path):
+    domain = Domain.from_geometry(
+        Point(-150.0, 70.0),
+        gid="g1",
+        name="filename-test",
+        mode="sites",
+        path_out=tmp_path,
+    )
+    exporter = Exporter(
+        adapter=ERA5Adapter(),
+        src_path=tmp_path,
+        domain=domain,
+        out_dir=tmp_path,
+    )
+    exporter.start_year = 1951
+    exporter.end_year = 2025
+
+    exporter.filename_prefix = None
+    assert exporter._nc_filename("TBOT") == "ERA5_TBOT_1951-2025_z01.nc"
+
+    exporter.filename_prefix = "CUSTOM_{var}_1980-2020_z01"
+    assert exporter._nc_filename("TBOT") == "CUSTOM_TBOT_1980-2020_z01.nc"
+
+    exporter.filename_prefix = "legacy"
+    assert exporter._nc_filename("TBOT") == "legacy_TBOT.nc"
+
+
 def test_era5_exporter_writes_midnight_axis_shifted_fluxes_and_metadata(tmp_path):
     source_dir = tmp_path / "csv"
     source_dir.mkdir()
@@ -388,9 +416,9 @@ def test_era5_exporter_writes_midnight_axis_shifted_fluxes_and_metadata(tmp_path
         overwrite=True,
     )
 
-    tbot_path = output_root / "g1" / "MET" / "TBOT.nc"
-    fsds_path = output_root / "g1" / "MET" / "FSDS.nc"
-    prect_path = output_root / "g1" / "MET" / "PRECTmms.nc"
+    tbot_path = output_root / "g1" / "MET" / "ERA5_TBOT_1950-1950_z01.nc"
+    fsds_path = output_root / "g1" / "MET" / "ERA5_FSDS_1950-1950_z01.nc"
+    prect_path = output_root / "g1" / "MET" / "ERA5_PRECTmms_1950-1950_z01.nc"
     assert tbot_path.exists() and fsds_path.exists() and prect_path.exists()
 
     with Dataset(tbot_path) as ds:
@@ -409,6 +437,13 @@ def test_era5_exporter_writes_midnight_axis_shifted_fluxes_and_metadata(tmp_path
         assert len(decoded) == 5
         assert ds.initial_state_fill.startswith("1950-01-01 00:00")
         assert ds.interval_start_variables == "FSDS, FLDS, PRECTmms"
+        assert ds.dimensions["scalar"].size == 1
+        assert ds["start_year"].dimensions == ("scalar",)
+        assert ds["end_year"].dimensions == ("scalar",)
+        assert ds["start_year"].dtype == np.dtype("int32")
+        assert ds["end_year"].dtype == np.dtype("int32")
+        assert int(ds["start_year"][0]) == 1950
+        assert int(ds["end_year"][0]) == 1950
         assert np.isfinite(ds["TBOT"][:]).all()
 
     with Dataset(fsds_path) as ds:

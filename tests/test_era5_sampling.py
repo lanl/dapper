@@ -224,7 +224,8 @@ def test_arco_sampling_writes_adapter_ready_csv_and_provenance(tmp_path, monkeyp
         dformat="BYPASS",
         clip_to_full_years=False,
     )
-    with xr.open_dataset(output_dir / "tfs" / "MET" / "TBOT.nc") as output:
+    met_path = output_dir / "tfs" / "MET" / "ERA5_TBOT_2020-2020_z01.nc"
+    with xr.open_dataset(met_path) as output:
         times = output["DTIME"].values
         assert len(times) == 2
         assert (times[0].year, times[0].month, times[0].day, times[0].hour) == (

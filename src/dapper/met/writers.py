@@ -162,6 +162,8 @@ def initialize_met_netcdf(
     fill_value=32767,
     chunks: tuple[int, ...] | None,
     write_pattern: str = "by_site",
+    start_year: int | None = None,
+    end_year: int | None = None,
     append_attrs: dict | None = None,
     var_attrs: dict | None = None,
     nc_format: str = "NETCDF4_CLASSIC",
@@ -173,6 +175,7 @@ def initialize_met_netcdf(
     Create a NetCDF file with:
       - provided dims
       - numeric DTIME coord
+      - ELM-readable ``start_year`` and ``end_year`` scalar variables
       - site/grid coords from coord_specs
       - packed int var with add_offset/scale_factor
 
@@ -181,6 +184,9 @@ def initialize_met_netcdf(
     path_nc = Path(path_nc)
     path_nc.parent.mkdir(parents=True, exist_ok=True)
     calendar = normalize_calendar(calendar)
+
+    if (start_year is None) != (end_year is None):
+        raise ValueError("start_year and end_year must be provided together")
 
     # Auto-chunk if not provided
     if chunks is None:
@@ -199,6 +205,16 @@ def initialize_met_netcdf(
         # Dimensions
         for name in dims:
             ds.createDimension(name, int(dim_lengths[name]))
+
+        # ELM's flexible-date CPL_BYPASS path reads these as one-element i4
+        # variables, rather than as global attributes.
+        if start_year is not None:
+            if "scalar" not in ds.dimensions:
+                ds.createDimension("scalar", 1)
+            vstart = ds.createVariable("start_year", "i4", ("scalar",))
+            vend = ds.createVariable("end_year", "i4", ("scalar",))
+            vstart[:] = np.asarray([start_year], dtype="int32")
+            vend[:] = np.asarray([end_year], dtype="int32")
 
         # Time coordinate
         vtime = ds.createVariable(dtime_name, "f8", (dtime_name,))

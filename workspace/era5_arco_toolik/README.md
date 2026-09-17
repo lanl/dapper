@@ -18,6 +18,10 @@ and raise if the input contains no complete year at all. A request beginning on
 1950-01-01 warns and clamps to January 2 rather than automatically requiring
 GEE.
 
+The ELM files use names such as ``ERA5_TBOT_1951-2025_z01.nc``. Their actual
+export range is also stored in the one-element integer variables
+``start_year`` and ``end_year`` for ELM's flexible-date reader.
+
 ## September 2026 benchmark
 
 All timings used the eight variables needed by the ELM exporter:

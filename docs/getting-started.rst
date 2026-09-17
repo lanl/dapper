@@ -194,3 +194,8 @@ Set ``clip_to_full_years=False`` to retain partial boundary years. When clipping
 is enabled but the input contains no complete calendar year, Dapper raises an
 error rather than quietly exporting a partial year; explicitly disable clipping
 when that partial-year output is intended.
+
+By default, met files retain the ELM naming convention, for example
+``ERA5_TBOT_1951-2025_z01.nc``. Each file also contains one-element ``i4``
+variables named ``start_year`` and ``end_year`` on a ``scalar`` dimension so
+ELM can read the forcing range directly instead of relying on hard-coded years.

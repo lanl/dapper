@@ -244,6 +244,7 @@ class Exporter:
             Optional filename template for output NetCDF files. Supports two formats:
             - Template with {var} placeholder: 'ERA5_{var}_1950-2025_z01' generates 'ERA5_TBOT_1950-2025_z01.nc'
             - Simple prefix (legacy): 'prefix' generates 'prefix_TBOT.nc'
+            If omitted, the default is '<driver>_<var>_<start>-<end>_z01.nc'.
             The '.nc' extension is added automatically.
 
         overwrite
@@ -351,6 +352,9 @@ class Exporter:
         Supports two formats:
         - Template with {var} placeholder: 'ERA5_{var}_1950-2025_z01' -> 'ERA5_TBOT_1950-2025_z01.nc'
         - Simple prefix (legacy): 'prefix' -> 'prefix_TBOT.nc'
+
+        With no override, use the ELM convention with the adapter driver tag,
+        actual export years, and the single-zone suffix.
         """
         if getattr(self, "filename_prefix", None):
             # Check if template contains {var} placeholder
@@ -358,7 +362,8 @@ class Exporter:
                 return f"{self.filename_prefix.format(var=var)}.nc"
             # Legacy prefix mode
             return f"{self.filename_prefix}_{var}.nc"
-        return f"{var}.nc"
+        driver = str(getattr(self.adapter, "DRIVER_TAG", "MET") or "MET").strip()
+        return f"{driver}_{var}_{self.start_year}-{self.end_year}_z01.nc"
 
     def _zone_mappings_table(self):
         """
@@ -507,6 +512,8 @@ class Exporter:
                 dtime_vals=self.dtime_vals,
                 dtime_units=self.dtime_units_out,
                 calendar=self.calendar,
+                start_year=self.start_year,
+                end_year=self.end_year,
                 coord_specs=[
                     {"name":"lat","dtype":"f4","dims":("lat",),"data":lats_axis.astype("float32"),
                      "attrs":{"units":"degrees_north","long_name":"latitude"}},
@@ -639,6 +646,8 @@ class Exporter:
                         dtime_vals=dvals_site,
                         dtime_units=dtime_units_out,
                         calendar=self.calendar,
+                        start_year=self.start_year,
+                        end_year=self.end_year,
                         coord_specs=[
                             {"name":"LATIXY","dtype":"f4","dims":("n",),"data":np.array([lat], dtype="float32"),
                              "attrs":{"units":"degrees_north","long_name":"latitude"}},

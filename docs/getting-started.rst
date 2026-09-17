@@ -172,6 +172,14 @@ See the `ECMWF product guide
 <https://confluence.ecmwf.int/pages/viewpage.action?pageId=685246455>`_ for the
 ARCO processing details.
 
+Backend selection does not redefine the model grid. Dapper preserves each
+input ``Domain`` cell's geometry, longitude, latitude, zone, and weights when
+attaching ERA5-Land sampling provenance. If GEE substitutes a point geometry
+to sample a polygon containing no pixel centers, that point is recorded as
+``sampling_reference_lon`` and ``sampling_reference_lat``; it does not replace
+the model coordinate used by ``zone_mappings.txt``, domain, surface, or met
+files.
+
 When ARCO is selected for a request beginning on 1950-01-01, Dapper emits a
 warning and clamps the sampled range to 1950-01-02. It does not switch the
 entire request to GEE merely to recover one day. The manifest and ELM metadata

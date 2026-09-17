@@ -340,7 +340,8 @@ def ensure_pixel_centers_within_geometries(fc, sample_img, scale):
     """
     Ensures each feature in `fc` will sample valid data from `sample_img` at the given `scale`.
     For polygons/multipolygons with zero pixel centers inside, replaces geometry with its centroid.
-    Properties are preserved.
+    Properties are preserved. This centroid is a sampling fallback only;
+    ``sample_era5_land`` preserves the input Domain's model coordinates.
     """
     band = sample_img.bandNames().get(0)
 

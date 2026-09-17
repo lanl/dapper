@@ -95,15 +95,30 @@ def test_auto_plan_accounts_for_per_location_request_time():
     assert plan.backend == "gee"
 
 
-def test_explicit_gee_backend_dispatches_to_existing_sampler(monkeypatch):
+def test_gee_sampling_preserves_model_coordinates_and_exports_reference(
+    monkeypatch, tmp_path
+):
     domain = _domain(box(-149.64, 68.56, -149.50, 68.64))
+    model_cells = domain.cells.copy()
+    model_cells["zone"] = 3
+    model_cells["weight"] = 0.75
+    domain = domain.copy(cells=model_cells)
+    model_cell = domain.cells.iloc[0]
+    sampling_point = Point(model_cell["lon"] + 0.02, model_cell["lat"] + 0.01)
+    sampling_domain = _domain(sampling_point)
+    sampling_cells = sampling_domain.cells.copy()
+    sampling_cells["method"] = "sampled at provided coordinate"
+    sampling_cells["sampled_geometry"] = sampling_point.wkt
+    sampling_cells["zone"] = 1
+    sampling_cells["weight"] = 1.0
+    sampling_domain = sampling_domain.copy(cells=sampling_cells)
     captured = {}
 
     def fake_sample_e5lh(params, domain_name, skip_tasks):
         captured.update(params)
         captured["domain_name"] = domain_name
         captured["skip_tasks"] = skip_tasks
-        return domain
+        return sampling_domain
 
     monkeypatch.setattr(
         "dapper.integrations.earthengine.gee_utils.sample_e5lh",
@@ -125,6 +140,96 @@ def test_explicit_gee_backend_dispatches_to_existing_sampler(monkeypatch):
     assert captured["gdrive_folder"] == "test-folder"
     assert captured["skip_tasks"] is True
     assert sampled.cells.iloc[0]["sampling_backend"] == "gee"
+    assert sampled.cells.iloc[0]["lon"] == pytest.approx(model_cell["lon"])
+    assert sampled.cells.iloc[0]["lat"] == pytest.approx(model_cell["lat"])
+    assert sampled.cells.iloc[0]["geometry"].equals(model_cell["geometry"])
+    assert sampled.cells.iloc[0]["zone"] == 3
+    assert sampled.cells.iloc[0]["weight"] == pytest.approx(0.75)
+    assert sampled.cells.iloc[0]["sampling_reference_lon"] == pytest.approx(
+        sampling_point.x
+    )
+    assert sampled.cells.iloc[0]["sampling_reference_lat"] == pytest.approx(
+        sampling_point.y
+    )
+
+    arco = sample_era5_land(
+        domain,
+        "2025-01-01",
+        "latest",
+        backend="arco",
+        skip_tasks=True,
+    )
+    assert sampled.to_df_loc().iloc[0]["lon"] == pytest.approx(
+        arco.to_df_loc().iloc[0]["lon"]
+    )
+    assert sampled.to_df_loc().iloc[0]["lat"] == pytest.approx(
+        arco.to_df_loc().iloc[0]["lat"]
+    )
+    assert sampled.to_df_loc().iloc[0]["sampling_reference_lon"] == pytest.approx(
+        sampling_point.x
+    )
+
+    csv_dir = tmp_path / "gee_csv"
+    csv_dir.mkdir()
+    pd.DataFrame(
+        {
+            "gid": ["site_0"] * 3,
+            "date": pd.date_range("2025-01-01", periods=3, freq="h"),
+            "temperature_2m": [270.0, 271.0, 272.0],
+            "dewpoint_temperature_2m": [268.0, 269.0, 270.0],
+            "surface_pressure": [90000.0, 90010.0, 90020.0],
+            "u_component_of_wind_10m": [1.0, 1.0, 1.0],
+            "v_component_of_wind_10m": [2.0, 2.0, 2.0],
+            "surface_solar_radiation_downwards_hourly": [0.0, 3600.0, 7200.0],
+            "surface_thermal_radiation_downwards_hourly": [720000.0] * 3,
+            "total_precipitation_hourly": [0.0, 0.001, 0.002],
+        }
+    ).to_csv(csv_dir / "gee.csv", index=False)
+    output_dir = tmp_path / "elm"
+    sampled.export_met(
+        src_path=csv_dir,
+        adapter=ERA5Adapter(),
+        out_dir=output_dir,
+        overwrite=True,
+        calendar="noleap",
+        dtime_resolution_hrs=1,
+        dtime_units="days",
+        dformat="BYPASS",
+        clip_to_full_years=False,
+    )
+
+    mapping = (output_dir / "site_0" / "MET" / "zone_mappings.txt").read_text()
+    mapping_lon, mapping_lat, _, _ = mapping.strip().split("\t")
+    assert float(mapping_lon) == pytest.approx(model_cell["lon"] % 360)
+    assert float(mapping_lat) == pytest.approx(model_cell["lat"])
+    with xr.open_dataset(output_dir / "site_0" / "MET" / "TBOT.nc") as output:
+        assert float(output["LONGXY"].values[0]) == pytest.approx(
+            model_cell["lon"] % 360
+        )
+        assert float(output["LATIXY"].values[0]) == pytest.approx(model_cell["lat"])
+        assert output.attrs["sampling_reference_lon"] == pytest.approx(
+            sampling_point.x
+        )
+        assert output.attrs["sampling_reference_lat"] == pytest.approx(
+            sampling_point.y
+        )
+
+    arco_output_dir = tmp_path / "elm_arco"
+    arco.export_met(
+        src_path=csv_dir,
+        adapter=ERA5Adapter(),
+        out_dir=arco_output_dir,
+        overwrite=True,
+        calendar="noleap",
+        dtime_resolution_hrs=1,
+        dtime_units="days",
+        dformat="BYPASS",
+        clip_to_full_years=False,
+    )
+    arco_mapping = (
+        arco_output_dir / "site_0" / "MET" / "zone_mappings.txt"
+    ).read_text()
+    assert arco_mapping == mapping
 
 
 class _FakeCDSClient:
@@ -242,6 +347,7 @@ def test_arco_sampling_writes_adapter_ready_csv_and_provenance(tmp_path, monkeyp
         )
         assert output.attrs["sampling_backend"] == "arco"
         assert output.attrs["sampling_grid_cell_count"] == 2
+        assert output.attrs["sampling_requested_start"] == "2020-01-01 00:00:00"
         assert output.attrs["sampling_output_end"] == "2020-01-01 01:00:00"
         assert "area-weighted mean" in output.attrs["sampling_method"]
 

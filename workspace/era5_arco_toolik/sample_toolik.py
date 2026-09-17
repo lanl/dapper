@@ -44,7 +44,6 @@ def main() -> None:
         src_path=csv_dir,
         adapter=ERA5Adapter(),
         out_dir=args.output / "elm",
-        filename="ERA5",
         overwrite=True,
         pack_scope="per-site",
         calendar="noleap",

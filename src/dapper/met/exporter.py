@@ -450,6 +450,8 @@ class Exporter:
         for column in (
             "sampling_backend",
             "sampling_dataset",
+            "sampling_reference_lon",
+            "sampling_reference_lat",
             "sampling_grid_cell_count",
             "sampling_grid_coordinates",
             "sampling_grid_weights",

@@ -53,6 +53,10 @@ ARCO_CELL_YEAR_MB = 0.54
 _ARCO_AREA_PAD_DEGREES = 0.001
 _SECONDS_PER_YEAR = 365.2425 * 24 * 60 * 60
 
+_DOMAIN_CELL_FIELDS = frozenset(
+    {"gid", "geometry", "lon", "lat", "zone", "weight", "frac"}
+)
+
 _RAW_TO_CDS = {
     "temperature_2m": "2m_temperature",
     "dewpoint_temperature_2m": "2m_dewpoint_temperature",
@@ -757,11 +761,14 @@ def _metadata_record(
 
 
 def _annotate_domain(domain: Domain, records: list[dict]) -> Domain:
+    """Attach sampling provenance without changing the model grid definition."""
     normalized = domain.ensure_cells_lon_lat()
     cells = normalized.cells.copy()
     cells["gid"] = cells["gid"].astype(str).str.strip()
     metadata = pd.DataFrame(records).set_index("gid")
     for column in metadata.columns:
+        if column in _DOMAIN_CELL_FIELDS:
+            continue
         values = metadata[column].to_dict()
         cells[column] = cells["gid"].map(values)
     return normalized.copy(cells=cells)
@@ -890,7 +897,16 @@ def _sample_gee(
         "job_name": job_name,
     }
     sampled = sample_e5lh(params, domain_name=domain.name, skip_tasks=skip_tasks)
-    records = sampled.cells.drop(columns="geometry", errors="ignore").to_dict("records")
+    sampling_cells = sampled.ensure_cells_lon_lat().cells.drop(
+        columns="geometry", errors="ignore"
+    )
+    sampling_cells = sampling_cells.rename(
+        columns={
+            "lon": "sampling_reference_lon",
+            "lat": "sampling_reference_lat",
+        }
+    )
+    records = sampling_cells.to_dict("records")
     support_by_gid = support.set_index("gid")
     for record in records:
         gid = str(record["gid"])
@@ -941,6 +957,10 @@ def sample_era5_land(
     mean of intersecting ERA5-Land cells with ARCO and GEE's spatial mean with
     GEE. Points use nearest-cell sampling. Use ``sampling_method='nearest'`` to
     sample polygon representative points instead.
+
+    Sampling provenance is attached without changing the input Domain's model
+    coordinates or weights. GEE geometry-reference coordinates are recorded as
+    ``sampling_reference_lon`` and ``sampling_reference_lat`` when available.
     """
     raw_names, cds_variables = _resolve_variables(variables)
     plan, specs = _build_plan(
